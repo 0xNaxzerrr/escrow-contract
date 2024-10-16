@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {nonReentrant} from "./ReentrancyGuard.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
-contract Escrow {
+contract Escrow is ReentrancyGuard {
     address public buyer;
     address public seller;
     address public arbiter;
