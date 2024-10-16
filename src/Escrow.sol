@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
+import {nonReentrant} from "./ReentrancyGuard.sol";
+
 contract Escrow {
     address public buyer;
     address public seller;
@@ -34,30 +36,6 @@ contract Escrow {
         arbiter = _arbiter;
     }
 
-    function tokenTransferedByBuyer() public atStage(Stages.DealSetup) {
-        require(msg.sender == buyer, "Only buyer can call this function.");
-
-        stage = Stages.TokenTransferedByBuyer;
-        emit StageChanged(stage);
-    }
-
-    function sellerCompletedTheDeal()
-        public
-        atStage(Stages.TokenTransferedByBuyer)
-    {
-        require(msg.sender == seller, "Only seller can call this function.");
-
-        stage = Stages.SellerCompletedTheDeal;
-        emit StageChanged(stage);
-    }
-
-    function finalize() public atStage(Stages.SellerCompletedTheDeal) {
-        require(msg.sender == arbiter, "Only arbiter can call this function.");
-
-        stage = Stages.Final;
-        emit StageChanged(stage);
-    }
-
     function getStage() public view returns (Stages) {
         return stage;
     }
@@ -78,11 +56,28 @@ contract Escrow {
         return address(this).balance;
     }
 
+    function sellerCompletedTheDeal()
+        public
+        atStage(Stages.TokenTransferedByBuyer)
+    {
+        require(msg.sender == seller, "Only seller can call this function.");
+
+        stage = Stages.SellerCompletedTheDeal;
+        emit StageChanged(stage);
+    }
+
+    function finalize() public atStage(Stages.SellerCompletedTheDeal) {
+        require(msg.sender == arbiter, "Only arbiter can call this function.");
+
+        stage = Stages.Final;
+        emit StageChanged(stage);
+    }
+
     function withdraw() public nonReentrant {
         require(msg.sender == buyer, "Only buyer can call this function.");
         require(stage == Stages.Final, "The deal is not finalized yet.");
         stage = Stages.Final;
-        emit Withdrawn(buyer, address(this).balance);
+        emit StageChanged(stage);
         payable(buyer).transfer(address(this).balance);
         emit Withdrawn(buyer, address(this).balance);
     }
