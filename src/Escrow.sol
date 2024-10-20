@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 contract Escrow is ReentrancyGuard {
     address public buyer;
@@ -43,20 +43,29 @@ contract Escrow is ReentrancyGuard {
         return address(this).balance;
     }
 
-    function tokenTransferredByBuyer() external payable atStage(Stages.DealSetup) {
+    function tokenTransferredByBuyer()
+        external
+        payable
+        atStage(Stages.DealSetup)
+    {
         require(msg.sender == buyer, "Only buyer can call this function.");
         require(msg.value > 0, "No funds sent.");
         stage = Stages.TokenTransferredByBuyer;
         emit StageChanged(stage);
     }
 
-    function sellerCompletedTheDeal() external atStage(Stages.TokenTransferredByBuyer) {
+    function sellerCompletedTheDeal()
+        external
+        atStage(Stages.TokenTransferredByBuyer)
+    {
         require(msg.sender == seller, "Only seller can call this function.");
         stage = Stages.SellerCompletedTheDeal;
         emit StageChanged(stage);
     }
 
-    function finalizeTo(address payable recipient) external atStage(Stages.SellerCompletedTheDeal) {
+    function finalizeTo(
+        address payable recipient
+    ) external atStage(Stages.SellerCompletedTheDeal) {
         require(msg.sender == arbiter, "Only arbiter can call this function.");
         uint256 balance = address(this).balance;
         stage = Stages.Final;
@@ -89,7 +98,9 @@ contract Escrow is ReentrancyGuard {
         selfdestruct(payable(arbiter));
     }
 
-    function destroyAndSend(address payable _recipient) external atStage(Stages.GoodToDestruct) {
+    function destroyAndSend(
+        address payable _recipient
+    ) external atStage(Stages.GoodToDestruct) {
         require(msg.sender == arbiter, "Only arbiter can call this function.");
         uint256 balance = address(this).balance;
         emit Destroyed(arbiter, balance);
@@ -97,10 +108,16 @@ contract Escrow is ReentrancyGuard {
     }
 
     receive() external payable {
-        require(stage == Stages.DealSetup, "Cannot accept funds at this stage.");
+        require(
+            stage == Stages.DealSetup,
+            "Cannot accept funds at this stage."
+        );
     }
 
     fallback() external payable {
-        require(stage == Stages.DealSetup, "Cannot accept funds at this stage.");
+        require(
+            stage == Stages.DealSetup,
+            "Cannot accept funds at this stage."
+        );
     }
 }
