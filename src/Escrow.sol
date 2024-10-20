@@ -98,11 +98,13 @@ contract Escrow is ReentrancyGuard {
         payable(buyer).transfer(balance);
     }
 
-    function destroy() external atStage(Stages.GoodToDestruct) {
+    function destroy(
+        address payable _recipient
+    ) external atStage(Stages.GoodToDestruct) {
         require(msg.sender == arbiter, "Only arbiter can call this function.");
         uint256 balance = address(this).balance;
         emit Destroyed(arbiter, balance);
-        selfdestruct(payable(arbiter));
+        _recipient.transfer(balance);
     }
 
     function destroyAndSend(
@@ -111,7 +113,7 @@ contract Escrow is ReentrancyGuard {
         require(msg.sender == arbiter, "Only arbiter can call this function.");
         uint256 balance = address(this).balance;
         emit Destroyed(arbiter, balance);
-        selfdestruct(_recipient);
+        _recipient.transfer(balance);
     }
 
     receive() external payable {
