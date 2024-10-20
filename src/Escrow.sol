@@ -10,7 +10,7 @@ contract Escrow is ReentrancyGuard {
 
     enum Stages {
         DealSetup,
-        TokenTransferedByBuyer,
+        TokenTransferredByBuyer,
         SellerCompletedTheDeal,
         Final,
         GoodToDestruct
@@ -19,116 +19,88 @@ contract Escrow is ReentrancyGuard {
     Stages public stage = Stages.DealSetup;
 
     modifier atStage(Stages _stage) {
-        require(stage == _stage, "Wrong pooling stage. Action not allowed.");
+        require(stage == _stage, "Wrong stage. Action not allowed.");
         _;
     }
 
     event StageChanged(Stages stage);
-    event Withdrawn(address buyer, uint256 amount);
-    event Cancelled(address arbiter, uint256 amount);
-    event Finalized(address arbiter, uint256 amount);
-    event Destroyed(address arbiter, uint256 amount);
+    event Withdrawn(address indexed buyer, uint256 amount);
+    event Cancelled(address indexed arbiter, uint256 amount);
+    event Finalized(address indexed arbiter, address recipient, uint256 amount);
+    event Destroyed(address indexed arbiter, uint256 amount);
 
     constructor(address _buyer, address _seller, address _arbiter) {
-        stage = Stages.DealSetup;
         buyer = _buyer;
         seller = _seller;
         arbiter = _arbiter;
     }
 
-    function getStage() public view returns (Stages) {
+    function getStage() external view returns (Stages) {
         return stage;
     }
 
-    function getBuyer() public view returns (address) {
-        return buyer;
-    }
-
-    function getSeller() public view returns (address) {
-        return seller;
-    }
-
-    function getArbiter() public view returns (address) {
-        return arbiter;
-    }
-
-    function getEscrowBalance() public view returns (uint256) {
+    function getEscrowBalance() external view returns (uint256) {
         return address(this).balance;
     }
 
-    function sellerCompletedTheDeal()
-        public
-        atStage(Stages.TokenTransferedByBuyer)
-    {
-        require(msg.sender == seller, "Only seller can call this function.");
+    function tokenTransferredByBuyer() external payable atStage(Stages.DealSetup) {
+        require(msg.sender == buyer, "Only buyer can call this function.");
+        require(msg.value > 0, "No funds sent.");
+        stage = Stages.TokenTransferredByBuyer;
+        emit StageChanged(stage);
+    }
 
+    function sellerCompletedTheDeal() external atStage(Stages.TokenTransferredByBuyer) {
+        require(msg.sender == seller, "Only seller can call this function.");
         stage = Stages.SellerCompletedTheDeal;
         emit StageChanged(stage);
     }
 
-    function finalize() public atStage(Stages.SellerCompletedTheDeal) {
+    function finalizeTo(address payable recipient) external atStage(Stages.SellerCompletedTheDeal) {
         require(msg.sender == arbiter, "Only arbiter can call this function.");
-
+        uint256 balance = address(this).balance;
         stage = Stages.Final;
         emit StageChanged(stage);
+        emit Finalized(arbiter, recipient, balance);
+        recipient.transfer(balance);
     }
 
-    function withdraw() public nonReentrant {
+    function withdraw() external nonReentrant atStage(Stages.Final) {
         require(msg.sender == buyer, "Only buyer can call this function.");
-        require(stage == Stages.Final, "The deal is not finalized yet.");
-        stage = Stages.Final;
-        emit StageChanged(stage);
-        payable(buyer).transfer(address(this).balance);
-        emit Withdrawn(buyer, address(this).balance);
+        uint256 balance = address(this).balance;
+        emit Withdrawn(buyer, balance);
+        payable(buyer).transfer(balance);
     }
 
-    function tokenTransferedByBuyer() public payable atStage(Stages.DealSetup) {
-        require(msg.sender == buyer, "Only buyer can call this function.");
-        require(msg.value > 0, "No funds sent.");
-        stage = Stages.TokenTransferedByBuyer;
-        emit StageChanged(stage);
-    }
-
-    function cancel() public {
+    function cancel() external {
         require(msg.sender == arbiter, "Only arbiter can call this function.");
         require(stage != Stages.Final, "The deal is already finalized.");
-
-        payable(buyer).transfer(address(this).balance);
+        uint256 balance = address(this).balance;
         stage = Stages.DealSetup;
         emit StageChanged(stage);
-        emit Cancelled(arbiter, address(this).balance);
+        emit Cancelled(arbiter, balance);
+        payable(buyer).transfer(balance);
     }
 
-    function finalizeToSeller() public atStage(Stages.SellerCompletedTheDeal) {
+    function destroy() external atStage(Stages.GoodToDestruct) {
         require(msg.sender == arbiter, "Only arbiter can call this function.");
-        payable(seller).transfer(address(this).balance);
-        emit Finalized(arbiter, address(this).balance);
-        stage = Stages.Final;
-        emit StageChanged(stage);
-    }
-
-    function finalizeToBuyer() public atStage(Stages.SellerCompletedTheDeal) {
-        require(msg.sender == arbiter, "Only arbiter can call this function.");
-        payable(buyer).transfer(address(this).balance);
-        emit Finalized(arbiter, address(this).balance);
-        stage = Stages.Final;
-        emit StageChanged(stage);
-    }
-    receive() external payable {}
-
-    fallback() external payable {}
-
-    function destroy() public atStage(Stages.GoodToDestruct) {
-        require(msg.sender == arbiter, "Only arbiter can call this function.");
+        uint256 balance = address(this).balance;
+        emit Destroyed(arbiter, balance);
         selfdestruct(payable(arbiter));
-        emit Destroyed(arbiter, address(this).balance);
     }
 
-    function destroyAndSend(
-        address payable _recipient
-    ) public atStage(Stages.GoodToDestruct) {
+    function destroyAndSend(address payable _recipient) external atStage(Stages.GoodToDestruct) {
         require(msg.sender == arbiter, "Only arbiter can call this function.");
+        uint256 balance = address(this).balance;
+        emit Destroyed(arbiter, balance);
         selfdestruct(_recipient);
-        emit Destroyed(arbiter, address(this).balance);
+    }
+
+    receive() external payable {
+        require(stage == Stages.DealSetup, "Cannot accept funds at this stage.");
+    }
+
+    fallback() external payable {
+        require(stage == Stages.DealSetup, "Cannot accept funds at this stage.");
     }
 }
