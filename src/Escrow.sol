@@ -39,6 +39,13 @@ contract Escrow is ReentrancyGuard {
         return stage;
     }
 
+    function getParticipants()
+        external
+        view
+        returns (address, address, address)
+    {
+        return (buyer, seller, arbiter);
+    }
     function getEscrowBalance() external view returns (uint256) {
         return address(this).balance;
     }
