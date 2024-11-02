@@ -23,6 +23,21 @@ contract Escrow is ReentrancyGuard {
         _;
     }
 
+    modifier onlyBuyer() {
+        require(msg.sender == buyer, "Only buyer can call this function.");
+        _;
+    }
+
+    modifier onlySeller() {
+        require(msg.sender == seller, "Only seller can call this function.");
+        _;
+    }
+
+    modifier onlyArbiter() {
+        require(msg.sender == arbiter, "Only arbiter can call this function.");
+        _;
+    }
+
     event StageChanged(Stages stage);
     event Withdrawn(address indexed buyer, uint256 amount);
     event Cancelled(address indexed arbiter, uint256 amount);
@@ -46,6 +61,7 @@ contract Escrow is ReentrancyGuard {
     {
         return (buyer, seller, arbiter);
     }
+
     function getEscrowBalance() external view returns (uint256) {
         return address(this).balance;
     }
@@ -54,8 +70,8 @@ contract Escrow is ReentrancyGuard {
         external
         payable
         atStage(Stages.DealSetup)
+        onlyBuyer
     {
-        require(msg.sender == buyer, "Only buyer can call this function.");
         require(msg.value > 0, "No funds sent.");
         stage = Stages.TokenTransferredByBuyer;
         emit StageChanged(stage);
@@ -64,16 +80,17 @@ contract Escrow is ReentrancyGuard {
     function sellerCompletedTheDeal()
         external
         atStage(Stages.TokenTransferredByBuyer)
+        onlySeller
     {
-        require(msg.sender == seller, "Only seller can call this function.");
         stage = Stages.SellerCompletedTheDeal;
         emit StageChanged(stage);
     }
 
-    function finalizeTo(
-        address payable recipient
-    ) external atStage(Stages.SellerCompletedTheDeal) {
-        require(msg.sender == arbiter, "Only arbiter can call this function.");
+    function finalizeTo(address payable recipient)
+        external
+        atStage(Stages.SellerCompletedTheDeal)
+        onlyArbiter
+    {
         uint256 balance = address(this).balance;
         stage = Stages.Final;
         emit StageChanged(stage);
@@ -81,15 +98,13 @@ contract Escrow is ReentrancyGuard {
         recipient.transfer(balance);
     }
 
-    function withdraw() external nonReentrant atStage(Stages.Final) {
-        require(msg.sender == buyer, "Only buyer can call this function.");
+    function withdraw() external nonReentrant atStage(Stages.Final) onlyBuyer {
         uint256 balance = address(this).balance;
         emit Withdrawn(buyer, balance);
         payable(buyer).transfer(balance);
     }
 
-    function cancel() external {
-        require(msg.sender == arbiter, "Only arbiter can call this function.");
+    function cancel() external onlyArbiter {
         require(stage != Stages.Final, "The deal is already finalized.");
         uint256 balance = address(this).balance;
         stage = Stages.DealSetup;
@@ -98,19 +113,11 @@ contract Escrow is ReentrancyGuard {
         payable(buyer).transfer(balance);
     }
 
-    function destroy(
-        address payable _recipient
-    ) external atStage(Stages.GoodToDestruct) {
-        require(msg.sender == arbiter, "Only arbiter can call this function.");
-        uint256 balance = address(this).balance;
-        emit Destroyed(arbiter, balance);
-        _recipient.transfer(balance);
-    }
-
-    function destroyAndSend(
-        address payable _recipient
-    ) external atStage(Stages.GoodToDestruct) {
-        require(msg.sender == arbiter, "Only arbiter can call this function.");
+    function closeContract(address payable _recipient)
+        external
+        atStage(Stages.GoodToDestruct)
+        onlyArbiter
+    {
         uint256 balance = address(this).balance;
         emit Destroyed(arbiter, balance);
         _recipient.transfer(balance);
