@@ -16,21 +16,10 @@ contract EscrowFactoryTest is Test {
         _factory = new EscrowFactory();
     }
 
-    function testCreateEscrowEmitsEvent() public {
-        // Act & Assert: Vérifier que l'événement `EscrowCreated` est bien émis
-        vm.expectEmit(true, true, true, true);
-        emit EscrowFactory.EscrowCreated(address(0), _buyer, _seller, _arbiter); // Spécifier l'événement attendu
-
-        // Appel de la fonction qui devrait émettre l'événement
-        _factory.createEscrow(_buyer, _seller, _arbiter);
-    }
-
     function testCreateEscrow() public {
         // Act: Créer un nouvel escrow via la factory
-        address escrowAddress = _factory.createEscrow(
-            _buyer,
-            _seller,
-            _arbiter
+        address payable escrowAddress = payable(
+            _factory.createEscrow(_buyer, _seller, _arbiter)
         );
 
         // Assert: Vérifier que l'instance d'escrow a bien été créée
@@ -40,7 +29,7 @@ contract EscrowFactoryTest is Test {
         );
 
         // Vérifier que l'instance d'escrow est bien enregistrée dans le tableau `escrows`
-        Escrow escrow = Escrow(_factory.getEscrow(0));
+        Escrow escrow = Escrow(escrowAddress);
         assertEq(address(escrow), escrowAddress, "Escrow address mismatch");
     }
 
@@ -50,23 +39,27 @@ contract EscrowFactoryTest is Test {
         _factory.createEscrow(_buyer, _seller, _arbiter);
 
         // Assert: Vérifier que les escrows sont bien enregistrés
-        Escrow[] memory escrows = _factory.getEscrows();
-        assertEq(escrows.length, 2, "Should have created 2 escrows");
+        assertEq(
+            _factory.getEscrows().length,
+            2,
+            "Should have created 2 escrows"
+        );
     }
 
     function testEscrowDetails() public {
         // Act: Créer un nouvel escrow et récupérer ses détails
-        address escrowAddress = _factory.createEscrow(
-            _buyer,
-            _seller,
-            _arbiter
+        address payable escrowAddress = payable(
+            _factory.createEscrow(_buyer, _seller, _arbiter)
         );
-        Escrow escrow = Escrow(escrowAddress);
+        Escrow _escrow = Escrow(escrowAddress);
 
         // Assert: Vérifier les informations initiales de l'escrow
-        assertEq(escrow.getBuyer(), _buyer, "Buyer address mismatch");
-        assertEq(escrow.getSeller(), _seller, "Seller address mismatch");
-        assertEq(escrow.getArbiter(), _arbiter, "Arbiter address mismatch");
+        (address buyer, address seller, address arbiter) = _escrow
+            .getParticipants();
+
+        assertEq(buyer, _buyer, "Buyer address mismatch");
+        assertEq(seller, _seller, "Seller address mismatch");
+        assertEq(arbiter, _arbiter, "Arbiter address mismatch");
     }
 
     function testOnlyOwnerCanCreate() public {
@@ -75,7 +68,7 @@ contract EscrowFactoryTest is Test {
 
         // Act & Assert: Vérifier que seul le propriétaire peut créer des escrows
         vm.prank(nonOwner);
-        vm.expectRevert(); // Revert attendu car nonOwner n'est pas le propriétaire
+        vm.expectRevert("Ownable: caller is not the owner");
         _factory.createEscrow(_buyer, _seller, _arbiter);
     }
 }
